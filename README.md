@@ -133,4 +133,4 @@ fi
 
 ## License
 
-MIT — do whatever you want, no warranty.
+BSD 2-Clause — do whatever you want, keep the copyright notice, no warranty.

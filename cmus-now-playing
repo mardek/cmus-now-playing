@@ -40,7 +40,7 @@
 # tmux status line:
 #   set -g status-right '#(cmus-now-playing -f "{state_icon} {artist} - {title}")'
 #
-# License: MIT
+# License: BSD 2-Clause
 
 set -u
 
