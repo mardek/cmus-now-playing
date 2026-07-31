@@ -9,6 +9,8 @@ conky, shell prompts**.
 ▶ Burial - Archangel [2:14/5:09]
 ```
 
+![cmus-now-playing in a tmux status bar (bottom left)](screenshot.png)
+
 ## Features
 
 - Single portable Bash script, no dependencies beyond `cmus-remote`
