@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+#
+# cmus-now-playing — print "now playing" status from cmus (cmus-remote)
+#
+# Designed for status bars and scripts (tmux, waybar, polybar, i3blocks,
+# conky, shell prompts). Outputs a single formatted line to stdout.
+#
+# Usage:
+#   cmus-now-playing [OPTIONS]
+#
+# Options:
+#   -f, --format FORMAT   Output format string (default: "{artist} - {title}")
+#                         Placeholders:
+#                           {state}        playing | paused | stopped
+#                           {state_icon}   ▶ | ⏸ | ■
+#                           {artist}       track artist
+#                           {title}        track title (falls back to filename)
+#                           {album}        album name
+#                           {tracknumber}  track number
+#                           {date}         release date / year
+#                           {duration}     track length, mm:ss
+#                           {position}     elapsed time, mm:ss
+#                           {remaining}    time left, mm:ss
+#                           {file}         full file path
+#                           {stream}       stream title (network streams)
+#   -s, --state           Print only the player state (playing|paused|stopped)
+#   -q, --quiet           No error messages; exit status still reflects state
+#   -h, --help            Show this help and exit
+#
+# Exit codes:
+#   0  cmus is running and a state was reported
+#   1  cmus is not running (or cmus-remote failed)
+#   2  invalid arguments
+#
+# Examples:
+#   cmus-now-playing
+#   cmus-now-playing -f '{state_icon} {artist} - {title} [{position}/{duration}]'
+#   cmus-now-playing -f '{album} ({date})'
+#
+# tmux status line:
+#   set -g status-right '#(cmus-now-playing -f "{state_icon} {artist} - {title}")'
+#
+# License: MIT
+
+set -u
+
+PROG="${0##*/}"
+FORMAT='{artist} - {title}'
+STATE_ONLY=0
+QUIET=0
+
+err() { [ "$QUIET" -eq 1 ] || printf '%s: %s\n' "$PROG" "$1" >&2; }
+
+usage() { sed -n '2,/^# License/p' "$0" | sed 's/^# \{0,1\}//'; }
+
+# --- arguments --------------------------------------------------------------
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -f|--format)
+            [ $# -ge 2 ] || { err "option '$1' requires an argument"; exit 2; }
+            FORMAT="$2"; shift 2 ;;
+        -s|--state) STATE_ONLY=1; shift ;;
+        -q|--quiet) QUIET=1; shift ;;
+        -h|--help)  usage; exit 0 ;;
+        *) err "unknown option: $1 (try --help)"; exit 2 ;;
+    esac
+done
+
+# --- query cmus -------------------------------------------------------------
+OUT="$(cmus-remote -Q 2>/dev/null)" || {
+    err "cmus is not running (cmus-remote -Q failed)"
+    exit 1
+}
+
+# Parse `key value` / `tag key value` lines into associative arrays.
+declare -A KV TAG
+while IFS= read -r line; do
+    case "$line" in
+        "tag "*)
+            rest="${line#tag }"
+            key="${rest%% *}"
+            TAG[$key]="${rest#* }" ;;
+        *" "*)
+            key="${line%% *}"
+            KV[$key]="${line#* }" ;;
+    esac
+done <<< "$OUT"
+
+STATE="${KV[status]:-unknown}"
+
+[ "$STATE_ONLY" -eq 1 ] && { printf '%s\n' "$STATE"; exit 0; }
+
+# --- helpers ----------------------------------------------------------------
+mmss() {  # seconds -> mm:ss
+    case "$1" in
+        ''|*[!0-9]*) printf -- '--:--' ;;
+        *) printf '%d:%02d' "$(($1 / 60))" "$(($1 % 60))" ;;
+    esac
+}
+
+FILE="${KV[file]:-}"
+TITLE="${TAG[title]:-}"
+if [ -z "$TITLE" ] && [ -n "$FILE" ]; then
+    TITLE="${FILE##*/}"          # fall back to filename
+    TITLE="${TITLE%.*}"          # strip extension
+fi
+
+case "$STATE" in
+    playing) ICON='▶' ;;
+    paused)  ICON='⏸' ;;
+    *)       ICON='■' ;;
+esac
+
+DUR="${KV[duration]:-}"
+POS="${KV[position]:-}"
+REM=''
+case "$DUR$POS" in
+    *[!0-9]*|'') ;;
+    *) REM=$(( DUR - POS )); [ "$REM" -lt 0 ] && REM=0 ;;
+esac
+
+# --- render -----------------------------------------------------------------
+OUT_LINE="$FORMAT"
+render() { OUT_LINE="${OUT_LINE//"$1"/"$2"}"; }
+render '{state}'       "$STATE"
+render '{state_icon}'  "$ICON"
+render '{artist}'      "${TAG[artist]:-}"
+render '{title}'       "$TITLE"
+render '{album}'       "${TAG[album]:-}"
+render '{tracknumber}' "${TAG[tracknumber]:-}"
+render '{date}'        "${TAG[date]:-}"
+render '{stream}'      "${TAG[stream]:-${KV[stream]:-}}"
+render '{file}'        "$FILE"
+render '{duration}'    "$(mmss "$DUR")"
+render '{position}'    "$(mmss "$POS")"
+render '{remaining}'   "$(mmss "$REM")"
+
+printf '%s\n' "$OUT_LINE"
