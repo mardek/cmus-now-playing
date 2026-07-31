@@ -94,45 +94,6 @@ cmus-now-playing --state
 # playing
 ```
 
-## Status bar integration
-
-**tmux** (`~/.tmux.conf`):
-
-```tmux
-set -g status-right '#(cmus-now-playing -f "{state_icon} {artist} - {title}")'
-set -g status-interval 5
-```
-
-**Waybar** (`~/.config/waybar/config`):
-
-```jsonc
-"custom/cmus": {
-    "exec": "cmus-now-playing -f '{state_icon} {artist} - {title}'",
-    "interval": 2,
-    "on-click": "cmus-remote --pause",
-    "on-click-right": "cmus-remote --next"
-}
-```
-
-**Polybar** (`~/.config/polybar/config.ini`):
-
-```ini
-[module/cmus]
-type = custom/script
-exec = cmus-now-playing -f '{state_icon} {artist} - {title}'
-interval = 2
-click-left = cmus-remote --pause
-click-right = cmus-remote --next
-```
-
-**Shell prompt / scripts:**
-
-```sh
-if now=$(cmus-now-playing -q -f '{state_icon} {title}'); then
-    printf 'now playing: %s\n' "$now"
-fi
-```
-
 ## License
 
 BSD 2-Clause — do whatever you want, keep the copyright notice, no warranty.
