@@ -5,10 +5,6 @@ A zero-dependency Bash script that prints the current playback status of
 line — built for status bars and scripts: **tmux, waybar, polybar, i3blocks,
 conky, shell prompts**.
 
-```
-▶ Burial - Archangel [2:14/5:09]
-```
-
 ![cmus-now-playing in a tmux status bar (bottom left)](screenshot.png)
 
 ## Features
