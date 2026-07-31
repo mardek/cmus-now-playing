@@ -33,6 +33,13 @@ sudo install -Dm755 cmus-now-playing /usr/local/bin/cmus-now-playing
 install -Dm755 cmus-now-playing ~/.local/bin/cmus-now-playing
 ```
 
+> **Note:** for the user-local install, make sure `~/.local/bin` is in your
+> `PATH`. Add this to your `~/.bashrc` (or `~/.zshrc`) if needed:
+>
+> ```sh
+> export PATH="$HOME/.local/bin:$PATH"
+> ```
+
 ## Usage
 
 ```
