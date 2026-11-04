@@ -62,13 +62,12 @@ set_title() {
 draw_status() {
   local out=$1
   local st shuffle pos dur icon scolor sicon shcolor swid vol
-  local artist year
+  local artist
   st=$(<<<"$out" awk '/^status /{print $2}')
   shuffle=$(<<<"$out" awk '/^set shuffle /{print $3}')
   pos=$(<<<"$out" awk '/^position /{print $2}')
   dur=$(<<<"$out" awk '/^duration /{print $2}')
   artist=$(<<<"$out" awk '/^tag artist /{sub(/^tag artist /,""); print}')
-  year=$(<<<"$out" awk '/^tag date /{print $3}')
   vol=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null)
   local gray=$'\e[38;2;90;95;105m'
   case $st in
@@ -89,11 +88,8 @@ draw_status() {
   local width=20 filled=0
   (( ${dur:-0} > 0 )) && filled=$(( ${pos:-0} * width / dur ))
   local fillbar=${(pl:$filled::━:)} emptybar=${(pl:$(( width - filled ))::─:)}
-  # magenta artist and green year
   local meta=''
-  [[ -n $artist ]] && meta+=$'\e[38;2;190;40;120m'"$artist"
-  [[ -n $year ]]   && meta+=$'\e[38;2;30;130;60m'" ($year)"
-  [[ -n $meta ]]   && meta+='   '
+  [[ -n $artist ]] && meta=$'\e[38;2;190;40;120m'"$artist   "
   # save cursor, jump to last line, print transparent bar, restore cursor
   # shuffle, volume and clock form one right-aligned block
   local volstr="🔊 ${vol:-?}%"
