@@ -85,21 +85,21 @@ draw_status() {
   local fmt_pos fmt_dur
   printf -v fmt_pos '%d:%02d' $(( ${pos:-0} / 60 )) $(( ${pos:-0} % 60 ))
   printf -v fmt_dur '%d:%02d' $(( ${dur:-0} / 60 )) $(( ${dur:-0} % 60 ))
-  # progress bar: █ filled / ░ empty (dim), same gray as the bar text
+  # slim progress bar with a purple played section and a dim remaining section
   local width=20 filled=0
   (( ${dur:-0} > 0 )) && filled=$(( ${pos:-0} * width / dur ))
-  local fillbar=${(pl:$filled::█:)} emptybar=${(pl:$(( width - filled ))::░:)}
-  # magenta artist and green year, readable on light bg
+  local fillbar=${(pl:$filled::━:)} emptybar=${(pl:$(( width - filled ))::─:)}
+  # magenta artist and green year
   local meta=''
   [[ -n $artist ]] && meta+=$'\e[38;2;190;40;120m'"$artist"
   [[ -n $year ]]   && meta+=$'\e[38;2;30;130;60m'" ($year)"
   [[ -n $meta ]]   && meta+='   '
-  # save cursor, jump to last line, print light bar, restore cursor
+  # save cursor, jump to last line, print transparent bar, restore cursor
   # shuffle, volume and clock form one right-aligned block
   local volstr="🔊 ${vol:-?}%"
   # cell width of "sicon   volstr   HH:MM:SS" (emoji count as 2 cells)
   local rw=$(( swid + 3 + ${#volstr} + 1 + 3 + 8 ))
-  printf '\e7\e[%d;1H\e[0m\e[2K\e[48;2;225;227;232m%s %s%s%s  \e[38;2;110;60;180m%s\e[38;2;30;100;190m/%s%s  %s\e[38;2;170;175;185m%s%s   %s\e[K\e[%dG%s%s\e[38;2;30;130;60m   %s\e[38;2;110;115;125m   %s\e[0m\e8' \
+  printf '\e7\e[%d;1H\e[0m\e[2K%s %s%s%s  \e[38;2;110;60;180m%s\e[38;2;30;100;190m/%s%s  \e[38;2;140;90;220m%s\e[38;2;90;95;105m%s%s   %s\e[K\e[%dG%s%s\e[38;2;30;130;60m   %s\e[38;2;110;115;125m   %s\e[0m\e8' \
     "$(tput lines)" "$gray" "$scolor" "$icon" "$gray" "$fmt_pos" "$fmt_dur" "$gray" "$fillbar" "$emptybar" "$gray" "$meta" "$(( $(tput cols) - rw ))" "$shcolor" "$sicon" "$volstr" "$(date +%H:%M:%S)"
 }
 
