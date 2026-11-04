@@ -138,10 +138,38 @@ draw_details() {
   printf '  \e[38;2;139;148;158mFile         \e[38;2;170;175;185m%s\e[0m\e[K\n\e[K\e8' "$file"
 }
 
+history_entry_rows() {
+  setopt localoptions extendedglob
+  local entry=${1//$'\e'\[[0-9;]#m/}
+  local char code width=0
+  for char in ${(s::)entry}; do
+    printf -v code '%d' "'$char"
+    if (( code >= 0x1100 && (code <= 0x115f || code == 0x2329 || code == 0x232a ||
+        (code >= 0x2e80 && code <= 0xa4cf) || (code >= 0xac00 && code <= 0xd7a3) ||
+        (code >= 0xf900 && code <= 0xfaff) || (code >= 0xfe10 && code <= 0xfe19) ||
+        (code >= 0xfe30 && code <= 0xfe6f) || (code >= 0xff00 && code <= 0xff60) ||
+        (code >= 0xffe0 && code <= 0xffe6) || (code >= 0x1f300 && code <= 0x1faff) ||
+        (code >= 0x20000 && code <= 0x3fffd)) )); then
+      (( width += 2 ))
+    else
+      (( width += 1 ))
+    fi
+  done
+  print $(( (width + $(tput cols) - 1) / $(tput cols) ))
+}
+
 render_history() {
-  local entry
+  local entry max_rows start=1 i entry_rows rows_used=0
   [[ $view_mode == history ]] && printf '\e[0m\e[1mHISTORY\e[0m\n\n'
-  for entry in "${history_lines[@]}"; do
+  max_rows=$(( $(tput lines) - 16 ))
+  [[ $view_mode == history ]] && max_rows=$(( $(tput lines) - 4 ))
+  for (( i=${#history_lines[@]}; i >= 1; --i )); do
+    entry_rows=$(history_entry_rows "$history_lines[i]")
+    (( rows_used + entry_rows > max_rows )) && break
+    (( rows_used += entry_rows ))
+    start=$i
+  done
+  for entry in "${history_lines[@]:$(( start - 1 ))}"; do
     printf '%s\n' "$entry"
   done
 }
