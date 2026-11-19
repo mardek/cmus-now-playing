@@ -2,7 +2,7 @@
 
 All notable changes to cmus-now-playing are documented in this file.
 
-## [Unreleased]
+## [1.0.0] - 2026-11-19
 
 ### Added
 
