@@ -1,30 +1,27 @@
 # cmus-now-playing
 
-A dependency-free Bash script that prints the current playback status of
-[cmus](https://cmus.github.io/) as a single formatted line, using only
-`cmus-remote`. Built for tmux, Waybar, Polybar, i3blocks, Conky, and shell
-prompts.
+A full-screen cmus track watcher with detailed current-track information, play
+history, playback controls, and a persistent status bar. The display uses
+truecolor ANSI colors and stays in the foreground until Ctrl+C.
 
-![cmus-now-playing in a tmux status bar (bottom left)](screenshot.png)
+![cmus-now-playing terminal display](screenshot.png)
 
 ## Features
 
-- Custom output formats with non-recursive placeholder expansion
+- Detailed current-track view with history below it
+- Compact history-only view; switching views preserves session history
+- Track and album navigation, pause, shuffle, seeking, and volume controls
 - Filename fallback when a track has no title tag
-- Network stream-title support
-- Optional output truncation and empty output when stopped
-- Waybar-compatible JSON with proper escaping
-- Clear exit codes and a quiet mode
-- Bash 3.2 and later, including the Bash bundled with macOS
+- Terminal window title showing the current track
 
 ## Requirements
 
-- Bash 3.2+
-- cmus, with its remote-control socket available
+- `zsh`
+- `cmus` with its remote-control socket available
+- `awk` and standard terminal utilities
+- macOS for volume fallback and start-time calculation
 
 ## Installation
-
-Install to `~/.local/bin` directly through the main script:
 
 ```sh
 curl -fsSL https://github.com/mardek/cmus-now-playing/raw/refs/heads/main/cmus-now-playing -o cmus-now-playing
@@ -32,113 +29,40 @@ chmod +x cmus-now-playing
 ./cmus-now-playing --install
 ```
 
-To install somewhere else, set `PREFIX` on the last command:
+This installs to `~/.local/bin`. To use another location, set `PREFIX`:
 
 ```sh
 PREFIX="$HOME/.local" ./cmus-now-playing --install
 ```
 
-For system-wide installation:
-
-```sh
-sudo PREFIX=/usr/local ./cmus-now-playing --install
-```
-
-Alternatively, install a local checkout directly:
-
-```sh
-mkdir -p ~/.local/bin
-install -m755 cmus-now-playing ~/.local/bin/cmus-now-playing
-```
-
-Make sure the installation directory is in your `PATH`:
-
-```sh
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-## Usage
-
-```text
-cmus-now-playing [OPTIONS]
-
-  -f, --format FORMAT   output format string (default: "{artist} - {title}")
-  -s, --state           print only the player state
-  -m, --max-length N    truncate to N characters, adding an ellipsis
-  --empty-stopped       print nothing when playback is stopped
-  --json                print Waybar-compatible JSON
-  --install             install to ${PREFIX:-~/.local}/bin and exit
-  -q, --quiet           suppress error messages
-  -h, --help            show help
-```
-
-### Format placeholders
-
-| Placeholder | Meaning | Example |
-| --- | --- | --- |
-| `{state}` | player state | `playing` |
-| `{state_icon}` | state icon | `▶ ⏸ ■` |
-| `{artist}` | track artist | `Burial` |
-| `{title}` | track title or filename fallback | `Archangel` |
-| `{album}` | album name | `Untrue` |
-| `{tracknumber}` | track number | `3` |
-| `{date}` | release date or year | `2007` |
-| `{duration}` | track length | `5:09` |
-| `{position}` | elapsed time | `2:14` |
-| `{remaining}` | time left | `2:55` |
-| `{file}` | full file path | `/music/…` |
-| `{stream}` | network stream title | `NTS Radio` |
-
-Times use `mm:ss`, or a longer minute count when needed. Unknown placeholders
-remain unchanged.
-
-### Exit codes
-
-| Code | Meaning |
-| --- | --- |
-| `0` | cmus is running and a state was reported |
-| `1` | cmus is not running or `cmus-remote -Q` failed |
-| `2` | invalid arguments |
-| `127` | `cmus-remote` is not installed |
-
-## Examples
+Make sure `~/.local/bin` is in your `PATH`, then run:
 
 ```sh
 cmus-now-playing
-# Burial - Archangel
-
-cmus-now-playing -f '{state_icon} {artist} - {title} [{position}/{duration}]'
-# ▶ Burial - Archangel [2:14/5:09]
-
-cmus-now-playing --json --max-length 40
-# {"text":"▶ Burial - Archangel","alt":"playing","class":"playing"}
-
-cmus-now-playing --empty-stopped --max-length 30
-cmus-now-playing --state
-# playing
 ```
 
-Waybar custom module:
+Optional aliases:
 
-```json
-"custom/cmus": {
-  "exec": "cmus-now-playing --json --empty-stopped --max-length 40",
-  "return-type": "json",
-  "interval": 1
-}
+```zsh
+alias now='~/.local/bin/cmus-now-playing'
+alias np='~/.local/bin/cmus-now-playing'
 ```
 
-## Development
+## Controls
 
-Run the test suite and syntax checks:
-
-```sh
-bash tests/run.sh
-bash -n cmus-now-playing tests/run.sh
-```
-
-The tests use a mock `cmus-remote`; cmus does not need to be running.
+| Key | Action |
+| --- | --- |
+| `1` | Detailed current track and history (default) |
+| `2` | Compact history |
+| `n` / `b` | Next / previous track |
+| `N` / `B` | Next / previous album |
+| Space | Play / pause |
+| `s` | Toggle shuffle |
+| `<` / `>` | Volume down / up |
+| Left / Right | Seek 5 seconds back / forward |
+| `c` | Clear history display |
+| Ctrl+C | Quit |
 
 ## License
 
-BSD 2-Clause. See [LICENSE](LICENSE).
+BSD 2-Clause — do whatever you want, keep the copyright notice, no warranty.
