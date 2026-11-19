@@ -2,6 +2,13 @@
 
 All notable changes to cmus-now-playing are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Switch the project license from BSD 2-Clause to the Original BSD License
+  (BSD 4-Clause).
+
 ## [1.0.0] - 2026-11-19
 
 ### Added

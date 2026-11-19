@@ -65,4 +65,4 @@ alias np='~/.local/bin/cmus-now-playing'
 
 ## License
 
-BSD 2-Clause — do whatever you want, keep the copyright notice, no warranty.
+Original BSD License (BSD 4-Clause) — retain notices, include the advertising acknowledgment, and do not imply endorsement.
