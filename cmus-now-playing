@@ -44,7 +44,9 @@
 #   cmus-now-playing --json --max-length 40
 #
 # Installation:
-#   curl -fsSL https://github.com/mardek/cmus-now-playing/raw/refs/heads/main/cmus-now-playing | bash -s -- --install
+#   curl -fsSL https://github.com/mardek/cmus-now-playing/raw/refs/heads/main/cmus-now-playing -o cmus-now-playing
+#   chmod +x cmus-now-playing
+#   ./cmus-now-playing --install
 #
 # tmux status line:
 #   set -g status-right '#(cmus-now-playing -f "{state_icon} {artist} - {title}")'
