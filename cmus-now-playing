@@ -1,307 +1,238 @@
-#!/bin/zsh
-# Watch cmus, print each track once it has passed (history), and show the
-# current track in a persistent status bar, with truecolor (RGB) ANSI colors.
-# Stays in the foreground until Ctrl+C (or cmus exits).
+#!/usr/bin/env bash
+#
+# cmus-now-playing — print "now playing" status from cmus (cmus-remote)
+#
+# Designed for status bars and scripts (tmux, waybar, polybar, i3blocks,
+# conky, shell prompts). Outputs a single formatted line to stdout.
+#
+# Usage:
+#   cmus-now-playing [OPTIONS]
+#
+# Options:
+#   -f, --format FORMAT   Output format string (default: "{artist} - {title}")
+#                         Placeholders:
+#                           {state}        playing | paused | stopped
+#                           {state_icon}   ▶ | ⏸ | ■
+#                           {artist}       track artist
+#                           {title}        track title (falls back to filename)
+#                           {album}        album name
+#                           {tracknumber}  track number
+#                           {date}         release date / year
+#                           {duration}     track length, mm:ss
+#                           {position}     elapsed time, mm:ss
+#                           {remaining}    time left, mm:ss
+#                           {file}         full file path
+#                           {stream}       stream title (network streams)
+#   -s, --state           Print only the player state (playing|paused|stopped)
+#   -m, --max-length N    Truncate output to N characters, adding an ellipsis
+#   --empty-stopped       Print nothing when playback is stopped
+#   --json                Print Waybar-compatible JSON
+#   -q, --quiet           No error messages; exit status still reflects state
+#   -h, --help            Show this help and exit
+#
+# Exit codes:
+#   0  cmus is running and a state was reported
+#   1  cmus is not running (or cmus-remote failed)
+#   2  invalid arguments
+#   127 cmus-remote is not installed
+#
+# Examples:
+#   cmus-now-playing
+#   cmus-now-playing -f '{state_icon} {artist} - {title} [{position}/{duration}]'
+#   cmus-now-playing -f '{album} ({date})'
+#   cmus-now-playing --json --max-length 40
+#
+# tmux status line:
+#   set -g status-right '#(cmus-now-playing -f "{state_icon} {artist} - {title}")'
+#
+# License: BSD 2-Clause
 
-cmus-remote -Q &>/dev/null || exit 0
+set -u
 
-print_track() {
-  local out=$1
-  local ts=${2:-$(date +%H:%M:%S)}   # when the track started, not when logged
-  local st title artist album year position duration
-  st=$(<<<"$out" awk '/^status /{print $2}')
-  title=$(<<<"$out" awk '/^tag title /{sub(/^tag title /,""); print}')
-  artist=$(<<<"$out" awk '/^tag artist /{sub(/^tag artist /,""); print}')
-  album=$(<<<"$out" awk '/^tag album /{sub(/^tag album /,""); print}')
-  year=$(<<<"$out" awk '/^tag date /{print $3}')
-  duration=$(<<<"$out" awk '/^duration /{print $2}')
+PROG="${0##*/}"
+FORMAT='{artist} - {title}'
+STATE_ONLY=0
+QUIET=0
+MAX_LENGTH=''
+EMPTY_STOPPED=0
+JSON=0
 
-  # fallback to filename if no title tag
-  if [[ -z $title ]]; then
-    title=$(<<<"$out" awk '/^file /{sub(/^file /,""); print}')
-    title=${${title##*/}%.*}
-  fi
+err() { [ "$QUIET" -eq 1 ] || printf '%s: %s\n' "$PROG" "$1" >&2; }
+usage() { sed -n '2,/^# License/p' "$0" | sed 's/^# \{0,1\}//'; }
 
-  local icon='■' scolor
-  case $st in
-    playing) icon='▶'; scolor=$'\e[38;2;80;250;123m' ;;   # green
-    paused)  icon='⏸'; scolor=$'\e[38;2;255;184;108m' ;;  # orange
-    *)       icon='■'; scolor=$'\e[38;2;255;85;85m' ;;    # red
-  esac
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -f|--format)
+            [ $# -ge 2 ] || { err "option '$1' requires an argument"; exit 2; }
+            FORMAT="$2"; shift 2 ;;
+        -m|--max-length)
+            [ $# -ge 2 ] || { err "option '$1' requires an argument"; exit 2; }
+            case "$2" in
+                ''|*[!0-9]*) err "max length must be a non-negative integer"; exit 2 ;;
+            esac
+            MAX_LENGTH="$2"; shift 2 ;;
+        -s|--state) STATE_ONLY=1; shift ;;
+        --empty-stopped) EMPTY_STOPPED=1; shift ;;
+        --json) JSON=1; shift ;;
+        -q|--quiet) QUIET=1; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) err "unknown option: $1 (try --help)"; exit 2 ;;
+    esac
+done
 
-  local fmt_dur
-  printf -v fmt_dur '%d:%02d' $(( ${duration:-0} / 60 )) $(( ${duration:-0} % 60 ))
-
-  local reset=$'\e[0m'
-  local year_str=''
-  [[ -n $year ]] && year_str=$'\e[38;2;80;250;123m'" $year"   # green, no brackets
-  printf '\e[38;2;139;148;158m%s | %s%s %s\e[38;2;0;255;255m%s\e[38;2;255;105;180m — %s\e[38;2;255;215;0m · %s%s\e[38;2;139;148;158m  [%s]%s\n' \
-    "$ts" "$scolor" "$icon" "$reset" "$title" "$artist" "$album" "$year_str" "$fmt_dur" "$reset"
+command -v cmus-remote >/dev/null 2>&1 || {
+    err "cmus-remote is not installed"
+    exit 127
 }
 
-# set the terminal window/tab title to the current track (cmus : title — artist · album (year))
-set_title() {
-  local out=$1
-  local title artist album year
-  title=$(<<<"$out" awk '/^tag title /{sub(/^tag title /,""); print}')
-  artist=$(<<<"$out" awk '/^tag artist /{sub(/^tag artist /,""); print}')
-  album=$(<<<"$out" awk '/^tag album /{sub(/^tag album /,""); print}')
-  year=$(<<<"$out" awk '/^tag date /{print $3}')
-  if [[ -z $title ]]; then
-    title=$(<<<"$out" awk '/^file /{sub(/^file /,""); print}')
-    title=${${title##*/}%.*}
-  fi
-  local s="cmus : $title"
-  [[ -n $artist ]] && s+=" — $artist"
-  [[ -n $album ]]  && s+=" · $album"
-  [[ -n $year ]]   && s+=" ($year)"
-  printf '\e]2;%s\a' "$s"
+OUT="$(cmus-remote -Q 2>/dev/null)" || {
+    err "cmus is not running (cmus-remote -Q failed)"
+    exit 1
 }
 
-# persistent status bar drawn on the last terminal line (tty only)
-draw_status() {
-  local out=$1
-  local st shuffle pos dur icon scolor sicon shcolor swid vol
-  local artist
-  st=$(<<<"$out" awk '/^status /{print $2}')
-  shuffle=$(<<<"$out" awk '/^set shuffle /{print $3}')
-  pos=$(<<<"$out" awk '/^position /{print $2}')
-  dur=$(<<<"$out" awk '/^duration /{print $2}')
-  artist=$(<<<"$out" awk '/^tag artist /{sub(/^tag artist /,""); print}')
-  vol=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null)
-  local gray=$'\e[38;2;90;95;105m'
-  case $st in
-    playing) icon='▶'; scolor=$'\e[38;2;30;130;60m' ;;    # green
-    paused)  icon='⏸'; scolor=$'\e[38;2;190;110;20m' ;;   # orange
-    *)       icon='■'; scolor=$'\e[38;2;200;40;40m' ;;    # red
-  esac
-  # swid = cell width of sicon (emoji count as 2 cells)
-  case $shuffle in
-    tracks) sicon='🔀 trk'; shcolor=$'\e[38;2;190;110;20m'; swid=6 ;;   # orange
-    albums) sicon='🔀 alb'; shcolor=$'\e[38;2;190;110;20m'; swid=6 ;;   # orange
-    *)      sicon='➡️ off'; shcolor=$gray; swid=6 ;;
-  esac
-  local fmt_pos fmt_dur
-  printf -v fmt_pos '%d:%02d' $(( ${pos:-0} / 60 )) $(( ${pos:-0} % 60 ))
-  printf -v fmt_dur '%d:%02d' $(( ${dur:-0} / 60 )) $(( ${dur:-0} % 60 ))
-  # slim progress bar with a purple played section and a dim remaining section
-  local width=20 filled=0
-  (( ${dur:-0} > 0 )) && filled=$(( ${pos:-0} * width / dur ))
-  local fillbar=${(pl:$filled::━:)} emptybar=${(pl:$(( width - filled ))::─:)}
-  local meta=''
-  [[ -n $artist ]] && meta=$'\e[38;2;190;40;120m'"$artist   "
-  # save cursor, jump to last line, print transparent bar, restore cursor
-  # shuffle, volume and clock form one right-aligned block
-  local volstr="🔊 ${vol:-?}%"
-  # cell width of "sicon   volstr   HH:MM:SS" (emoji count as 2 cells)
-  local rw=$(( swid + 3 + ${#volstr} + 1 + 3 + 8 ))
-  printf '\e7\e[%d;1H\e[0m\e[2K%s %s%s%s  \e[38;2;110;60;180m%s\e[38;2;30;100;190m/%s%s  \e[38;2;140;90;220m%s\e[38;2;90;95;105m%s%s   %s\e[K\e[%dG%s%s\e[38;2;30;130;60m   %s\e[38;2;110;115;125m   %s\e[0m\e8' \
-    "$(tput lines)" "$gray" "$scolor" "$icon" "$gray" "$fmt_pos" "$fmt_dur" "$gray" "$fillbar" "$emptybar" "$gray" "$meta" "$(( $(tput cols) - rw ))" "$shcolor" "$sicon" "$volstr" "$(date +%H:%M:%S)"
+STATE='unknown'
+FILE=''
+DUR=''
+POS=''
+ARTIST=''
+TITLE=''
+ALBUM=''
+TRACKNUMBER=''
+DATE=''
+STREAM=''
+
+while IFS= read -r line; do
+    case "$line" in
+        "tag "*)
+            rest="${line#tag }"
+            key="${rest%% *}"
+            value="${rest#* }"
+            case "$key" in
+                artist) ARTIST="$value" ;;
+                title) TITLE="$value" ;;
+                album) ALBUM="$value" ;;
+                tracknumber) TRACKNUMBER="$value" ;;
+                date) DATE="$value" ;;
+                stream) STREAM="$value" ;;
+            esac ;;
+        *" "*)
+            key="${line%% *}"
+            value="${line#* }"
+            case "$key" in
+                status) STATE="$value" ;;
+                file) FILE="$value" ;;
+                duration) DUR="$value" ;;
+                position) POS="$value" ;;
+                stream) [ -n "$STREAM" ] || STREAM="$value" ;;
+            esac ;;
+    esac
+done <<EOF
+$OUT
+EOF
+
+[ "$STATE_ONLY" -eq 1 ] && { printf '%s\n' "$STATE"; exit 0; }
+[ "$EMPTY_STOPPED" -eq 1 ] && [ "$STATE" = stopped ] && exit 0
+
+mmss() {
+    case "$1" in
+        ''|*[!0-9]*) printf -- '--:--' ;;
+        *) printf '%d:%02d' "$(($1 / 60))" "$(($1 % 60))" ;;
+    esac
 }
 
-draw_details() {
-  local out=$1
-  local st title artist album albumartist composer year track file pos dur icon
-  st=$(<<<"$out" awk '/^status /{print $2}')
-  title=$(<<<"$out" awk '/^tag title /{sub(/^tag title /,""); print}')
-  artist=$(<<<"$out" awk '/^tag artist /{sub(/^tag artist /,""); print}')
-  album=$(<<<"$out" awk '/^tag album /{sub(/^tag album /,""); print}')
-  albumartist=$(<<<"$out" awk '/^tag albumartist /{sub(/^tag albumartist /,""); print}')
-  composer=$(<<<"$out" awk '/^tag composer /{sub(/^tag composer /,""); print}')
-  year=$(<<<"$out" awk '/^tag date /{print $3}')
-  track=$(<<<"$out" awk '/^tag tracknumber /{print $3}')
-  file=$(<<<"$out" awk '/^file /{sub(/^file /,""); print}')
-  pos=$(<<<"$out" awk '/^position /{print $2}')
-  dur=$(<<<"$out" awk '/^duration /{print $2}')
-  if [[ -z $title ]]; then
-    title=${${file##*/}%.*}
-  fi
-  artist=${artist:-Unknown}
-  albumartist=${albumartist:-Unknown}
-  composer=${composer:-Unknown}
-  file=${file##*/}
-  case $st in
-    playing) icon='▶' ;;
-    paused)  icon='⏸' ;;
-    *)       icon='■' ;;
-  esac
-  local fmt_pos fmt_dur
-  printf -v fmt_pos '%d:%02d' $(( ${pos:-0} / 60 )) $(( ${pos:-0} % 60 ))
-  printf -v fmt_dur '%d:%02d' $(( ${dur:-0} / 60 )) $(( ${dur:-0} % 60 ))
-  printf '\e7\e[1;1H\e[0m\e[1mNOW PLAYING\e[0m\e[K\n\e[K\n  %s \e[38;2;255;105;180m%s\e[0m\e[K\n  \e[38;2;0;255;255m%s\e[0m\e[K\n  \e[38;2;90;95;105m────────────────────────────────────────────────\e[0m\e[K\n' "$icon" "$artist" "$title"
-  printf '  \e[38;2;139;148;158mAlbum        \e[38;2;255;215;0m%s\e[0m\e[K\n' "$album"
-  printf '  \e[38;2;139;148;158mAlbum artist \e[38;2;255;105;180m%s\e[0m\e[K\n' "$albumartist"
-  printf '  \e[38;2;139;148;158mComposer     \e[38;2;255;105;180m%s\e[0m\e[K\n' "$composer"
-  printf '  \e[38;2;139;148;158mYear         \e[38;2;80;250;123m%s\e[0m\e[K\n' "$year"
-  printf '  \e[38;2;139;148;158mTrack        \e[38;2;0;255;255m%s\e[0m\e[K\n' "$track"
-  printf '  \e[38;2;139;148;158mPlayed       %s/%s\e[0m\e[K\n' "$fmt_pos" "$fmt_dur"
-  printf '  \e[38;2;139;148;158mFile         \e[38;2;170;175;185m%s\e[0m\e[K\n\e[K\e8' "$file"
-}
-
-history_entry_rows() {
-  setopt localoptions extendedglob
-  local entry=${1//$'\e'\[[0-9;]#m/}
-  local char code width=0
-  for char in ${(s::)entry}; do
-    printf -v code '%d' "'$char"
-    if (( code >= 0x1100 && (code <= 0x115f || code == 0x2329 || code == 0x232a ||
-        (code >= 0x2e80 && code <= 0xa4cf) || (code >= 0xac00 && code <= 0xd7a3) ||
-        (code >= 0xf900 && code <= 0xfaff) || (code >= 0xfe10 && code <= 0xfe19) ||
-        (code >= 0xfe30 && code <= 0xfe6f) || (code >= 0xff00 && code <= 0xff60) ||
-        (code >= 0xffe0 && code <= 0xffe6) || (code >= 0x1f300 && code <= 0x1faff) ||
-        (code >= 0x20000 && code <= 0x3fffd)) )); then
-      (( width += 2 ))
-    else
-      (( width += 1 ))
-    fi
-  done
-  print $(( (width + $(tput cols) - 1) / $(tput cols) ))
-}
-
-render_history() {
-  local entry max_rows start=1 i entry_rows rows_used=0
-  [[ $view_mode == history ]] && printf '\e[0m\e[1mHISTORY\e[0m\n\n'
-  max_rows=$(( $(tput lines) - 16 ))
-  [[ $view_mode == history ]] && max_rows=$(( $(tput lines) - 4 ))
-  for (( i=${#history_lines[@]}; i >= 1; --i )); do
-    entry_rows=$(history_entry_rows "$history_lines[i]")
-    (( rows_used + entry_rows > max_rows )) && break
-    (( rows_used += entry_rows ))
-    start=$i
-  done
-  for entry in "${history_lines[@]:$(( start - 1 ))}"; do
-    printf '%s\n' "$entry"
-  done
-}
-
-set_view() {
-  view_mode=$1
-  printf '\e[r\e[2J\e[H'
-  if [[ $view_mode == detail ]]; then
-    printf '\e[15;%dr\e[15;1H' $(( $(tput lines) - 1 ))
-  else
-    printf '\e[3;%dr\e[1;1H' $(( $(tput lines) - 1 ))
-  fi
-  render_history
-}
-
-# volume: try cmus softvol first, fall back to macOS system volume
-# (cmus-remote exits 0 even on error, so check the error output)
-vol_adjust() {
-  local delta=$1
-  local err
-  err=$(cmus-remote -v "${delta}%" 2>&1)
-  if [[ $err == *Error* ]]; then
-    osascript -e "set v to (output volume of (get volume settings)) + ${delta}" \
-              -e 'if v < 0 then set v to 0' \
-              -e 'if v > 100 then set v to 100' \
-              -e 'set volume output volume v' &>/dev/null
-  fi
-}
-
-# skip forward/backward until the album tag changes (cmus has no album skip);
-# going backward, land on the first track of the previous album
-skip_album() {
-  local dir=$1 q album file target a f i
-  q=$(cmus-remote -Q 2>/dev/null) || return
-  album=$(<<<"$q" awk '/^tag album /{sub(/^tag album /,""); print; exit}')
-  file=$(<<<"$q" awk '/^file /{sub(/^file /,""); print; exit}')
-  for i in {1..999}; do
-    [[ $dir == n ]] && cmus-remote -n || cmus-remote -r
-    q=$(cmus-remote -Q 2>/dev/null) || return
-    a=$(<<<"$q" awk '/^tag album /{sub(/^tag album /,""); print; exit}')
-    f=$(<<<"$q" awk '/^file /{sub(/^file /,""); print; exit}')
-    [[ $f == "$file" ]] && return        # edge of playlist, can't move
-    [[ $a != "$album" ]] && break
-  done
-  if [[ $dir == r ]]; then
-    target=$a; file=$f
-    for i in {1..999}; do
-      cmus-remote -r
-      q=$(cmus-remote -Q 2>/dev/null) || return
-      a=$(<<<"$q" awk '/^tag album /{sub(/^tag album /,""); print; exit}')
-      f=$(<<<"$q" awk '/^file /{sub(/^file /,""); print; exit}')
-      [[ $f == "$file" ]] && break       # already at album start
-      if [[ $a != "$target" ]]; then
-        cmus-remote -n                   # stepped too far, back to album start
-        break
-      fi
-      file=$f
-    done
-  fi
-}
-
-# raw terminal for single-key controls, restored on exit
-# scroll region leaves the header and last status line in place
-view_mode=detail
-history_lines=()
-if [[ -t 0 ]]; then
-  saved_stty=$(stty -g)
-  stty -icanon -echo
-  printf '\e[?25l'
-  set_view detail
-  trap 'stty "$saved_stty" 2>/dev/null; printf "\e[?25h\e[r\e[%d;1H\e[0m\e[2K\e]2;\a" "$(tput lines)"' EXIT
-  trap 'exit 130' INT TERM
+if [ -z "$TITLE" ] && [ -n "$FILE" ]; then
+    TITLE="${FILE##*/}"
+    TITLE="${TITLE%.*}"
 fi
 
-last_file=''
-last_out=''
-last_started=''
-while true; do
-  out=$(cmus-remote -Q 2>/dev/null) || break
-  file=$(<<<"$out" awk '/^file /{sub(/^file /,""); print}')
-  if [[ -n $file && $file != "$last_file" ]]; then
-    # history: log the previous track only once it has passed,
-    # stamped with the time it started playing
-    if [[ -n $last_out ]]; then
-      history_lines+=("$(print_track "$last_out" "$last_started")")
-      [[ -t 0 ]] && set_view "$view_mode"
+case "$STATE" in
+    playing) ICON='▶' ;;
+    paused)  ICON='⏸' ;;
+    *)       ICON='■' ;;
+esac
+
+REM=''
+case "$DUR$POS" in
+    *[!0-9]*|'') ;;
+    *) REM=$(( DUR - POS )); [ "$REM" -lt 0 ] && REM=0 ;;
+esac
+
+DURATION="$(mmss "$DUR")"
+POSITION="$(mmss "$POS")"
+REMAINING="$(mmss "$REM")"
+
+# Expand placeholders in one pass so placeholder-like tag text stays literal.
+OUT_LINE=''
+rest="$FORMAT"
+while case "$rest" in *'{'*) true ;; *) false ;; esac; do
+    prefix="${rest%%\{*}"
+    token_and_suffix="${rest#*\{}"
+    token="${token_and_suffix%%\}*}"
+    if [ "$token_and_suffix" = "$token" ]; then
+        OUT_LINE="$OUT_LINE$rest"
+        rest=''
+        break
     fi
-    [[ -t 1 ]] && set_title "$out"
-    last_file=$file
-    last_out=$out
-    # true start time: now minus how long the track has already been playing
-    local_pos=$(<<<"$out" awk '/^position /{print $2}')
-    last_started=$(date -v-${local_pos:-0}S +%H:%M:%S)
-  fi
-  if [[ -t 0 ]]; then
-    if [[ $view_mode == detail ]]; then
-      draw_details "$out"
-    else
-      printf '\e7\e[1;1H\e[0m\e[2K\e[1mHISTORY\e[0m\e8'
-    fi
-    draw_status "$out"
-  fi
-  # 1: detailed current track and history, 2: compact history
-  # n: next track, b: previous track, N: next album, B: previous album
-  # space: toggle pause, s: toggle shuffle
-  # <: volume down, >: volume up, c: clear screen
-  # ←/→: seek 5s back/forward in the current track
-  if [[ -t 0 ]]; then
-    if read -k 1 -t 1 key; then
-      case $key in
-        1)   set_view detail ;;
-        2)   set_view history ;;
-        n)   cmus-remote -n ;;
-        b)   cmus-remote -r ;;
-        N)   skip_album n ;;
-        B)   skip_album r ;;
-        ' ') cmus-remote -u ;;
-        s)   cmus-remote -S ;;
-        '<') vol_adjust -5 ;;
-        '>') vol_adjust +5 ;;
-        c)   history_lines=(); set_view "$view_mode"; continue ;;
-        $'\e')
-          # arrow keys arrive as ESC [ C / ESC [ D
-          if read -k 2 -t 0.05 arrow; then
-            case $arrow in
-              '[C') cmus-remote -k +5 ;;
-              '[D') cmus-remote -k -5 ;;
-            esac
-          fi ;;
-      esac
-    fi
-  else
-    sleep 1
-  fi
+    suffix="${token_and_suffix#*\}}"
+    case "{$token}" in
+        '{state}') value="$STATE" ;;
+        '{state_icon}') value="$ICON" ;;
+        '{artist}') value="$ARTIST" ;;
+        '{title}') value="$TITLE" ;;
+        '{album}') value="$ALBUM" ;;
+        '{tracknumber}') value="$TRACKNUMBER" ;;
+        '{date}') value="$DATE" ;;
+        '{stream}') value="$STREAM" ;;
+        '{file}') value="$FILE" ;;
+        '{duration}') value="$DURATION" ;;
+        '{position}') value="$POSITION" ;;
+        '{remaining}') value="$REMAINING" ;;
+        *) value="{$token}" ;;
+    esac
+    OUT_LINE="$OUT_LINE$prefix$value"
+    rest="$suffix"
 done
+OUT_LINE="$OUT_LINE$rest"
+
+if [ -n "$MAX_LENGTH" ] && [ "${#OUT_LINE}" -gt "$MAX_LENGTH" ]; then
+    if [ "$MAX_LENGTH" -eq 0 ]; then
+        OUT_LINE=''
+    elif [ "$MAX_LENGTH" -eq 1 ]; then
+        OUT_LINE='…'
+    else
+        OUT_LINE="${OUT_LINE:0:$((MAX_LENGTH - 1))}…"
+    fi
+fi
+
+json_escape() {
+    local text="$1" char code escaped='' i
+    LC_ALL=C
+    for ((i = 0; i < ${#text}; i++)); do
+        char="${text:$i:1}"
+        case "$char" in
+            '"') escaped="$escaped\\\"" ;;
+            '\') escaped="$escaped\\\\" ;;
+            $'\b') escaped="$escaped\\b" ;;
+            $'\f') escaped="$escaped\\f" ;;
+            $'\n') escaped="$escaped\\n" ;;
+            $'\r') escaped="$escaped\\r" ;;
+            $'\t') escaped="$escaped\\t" ;;
+            *)
+                printf -v code '%d' "'$char"
+                if [ "$code" -lt 32 ]; then
+                    printf -v char '\\u%04x' "$code"
+                    escaped="$escaped$char"
+                else
+                    escaped="$escaped$char"
+                fi ;;
+        esac
+    done
+    printf '%s' "$escaped"
+}
+
+if [ "$JSON" -eq 1 ]; then
+    printf '{"text":"%s","alt":"%s","class":"%s"}\n' \
+        "$(json_escape "$OUT_LINE")" "$(json_escape "$STATE")" "$(json_escape "$STATE")"
+else
+    printf '%s\n' "$OUT_LINE"
+fi
