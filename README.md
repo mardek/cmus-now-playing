@@ -27,19 +27,19 @@ prompts.
 Install to `~/.local/bin` directly through the main script:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing | bash -s -- --install
+curl -fsSL https://github.com/mardek/cmus-now-playing/raw/refs/heads/main/cmus-now-playing | bash -s -- --install
 ```
 
 To install somewhere else, set `PREFIX`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing | PREFIX="$HOME/.local" bash -s -- --install
+curl -fsSL https://github.com/mardek/cmus-now-playing/raw/refs/heads/main/cmus-now-playing | PREFIX="$HOME/.local" bash -s -- --install
 ```
 
 For system-wide installation:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing | sudo PREFIX=/usr/local bash -s -- --install
+curl -fsSL https://github.com/mardek/cmus-now-playing/raw/refs/heads/main/cmus-now-playing | sudo PREFIX=/usr/local bash -s -- --install
 ```
 
 Alternatively, install a local checkout directly:

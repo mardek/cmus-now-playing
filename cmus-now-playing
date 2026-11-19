@@ -44,7 +44,7 @@
 #   cmus-now-playing --json --max-length 40
 #
 # Installation:
-#   curl -fsSL https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing | bash -s -- --install
+#   curl -fsSL https://github.com/mardek/cmus-now-playing/raw/refs/heads/main/cmus-now-playing | bash -s -- --install
 #
 # tmux status line:
 #   set -g status-right '#(cmus-now-playing -f "{state_icon} {artist} - {title}")'
@@ -89,7 +89,7 @@ done
 if [ "$INSTALL" -eq 1 ]; then
     command -v curl >/dev/null 2>&1 || { err "curl is required for installation"; exit 1; }
     PREFIX="${PREFIX:-$HOME/.local}"
-    SOURCE_URL="${CMUS_NOW_PLAYING_SOURCE_URL:-https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing}"
+    SOURCE_URL="${CMUS_NOW_PLAYING_SOURCE_URL:-https://github.com/mardek/cmus-now-playing/raw/refs/heads/main/cmus-now-playing}"
     TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cmus-now-playing.XXXXXX")"
     trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
     curl -fsSL "$SOURCE_URL" -o "$TMP_DIR/cmus-now-playing" || { err "download failed"; exit 1; }
