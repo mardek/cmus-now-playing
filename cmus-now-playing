@@ -27,6 +27,7 @@
 #   -m, --max-length N    Truncate output to N characters, adding an ellipsis
 #   --empty-stopped       Print nothing when playback is stopped
 #   --json                Print Waybar-compatible JSON
+#   --install             Install to ${PREFIX:-~/.local}/bin and exit
 #   -q, --quiet           No error messages; exit status still reflects state
 #   -h, --help            Show this help and exit
 #
@@ -42,6 +43,9 @@
 #   cmus-now-playing -f '{album} ({date})'
 #   cmus-now-playing --json --max-length 40
 #
+# Installation:
+#   curl -fsSL https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing | bash -s -- --install
+#
 # tmux status line:
 #   set -g status-right '#(cmus-now-playing -f "{state_icon} {artist} - {title}")'
 #
@@ -56,6 +60,7 @@ QUIET=0
 MAX_LENGTH=''
 EMPTY_STOPPED=0
 JSON=0
+INSTALL=0
 
 err() { [ "$QUIET" -eq 1 ] || printf '%s: %s\n' "$PROG" "$1" >&2; }
 usage() { sed -n '2,/^# License/p' "$0" | sed 's/^# \{0,1\}//'; }
@@ -74,11 +79,29 @@ while [ $# -gt 0 ]; do
         -s|--state) STATE_ONLY=1; shift ;;
         --empty-stopped) EMPTY_STOPPED=1; shift ;;
         --json) JSON=1; shift ;;
+        --install) INSTALL=1; shift ;;
         -q|--quiet) QUIET=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) err "unknown option: $1 (try --help)"; exit 2 ;;
     esac
 done
+
+if [ "$INSTALL" -eq 1 ]; then
+    command -v curl >/dev/null 2>&1 || { err "curl is required for installation"; exit 1; }
+    PREFIX="${PREFIX:-$HOME/.local}"
+    SOURCE_URL="${CMUS_NOW_PLAYING_SOURCE_URL:-https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing}"
+    TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cmus-now-playing.XXXXXX")"
+    trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
+    curl -fsSL "$SOURCE_URL" -o "$TMP_DIR/cmus-now-playing" || { err "download failed"; exit 1; }
+    bash -n "$TMP_DIR/cmus-now-playing" || { err "downloaded script is invalid"; exit 1; }
+    mkdir -p "$PREFIX/bin"
+    chmod 755 "$TMP_DIR/cmus-now-playing"
+    mv "$TMP_DIR/cmus-now-playing" "$PREFIX/bin/cmus-now-playing"
+    trap - EXIT HUP INT TERM
+    rmdir "$TMP_DIR"
+    printf 'Installed %s\n' "$PREFIX/bin/cmus-now-playing"
+    exit 0
+fi
 
 command -v cmus-remote >/dev/null 2>&1 || {
     err "cmus-remote is not installed"

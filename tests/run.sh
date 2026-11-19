@@ -129,6 +129,12 @@ run env PATH="$TMP_DIR/empty" /bin/bash "$SCRIPT"
 check 'missing cmus-remote exit code' '127' "$STATUS"
 check 'missing cmus-remote message' 'cmus-now-playing: cmus-remote is not installed' "$STDERR"
 
+run env PREFIX="$TMP_DIR/prefix" CMUS_NOW_PLAYING_SOURCE_URL="file://$SCRIPT" \
+    /bin/bash "$SCRIPT" --install
+check 'script self-install exit code' '0' "$STATUS"
+run test -x "$TMP_DIR/prefix/bin/cmus-now-playing"
+check 'script self-install creates executable' '0' "$STATUS"
+
 run /bin/bash "$SCRIPT" --help
 check 'help exit code' '0' "$STATUS"
 

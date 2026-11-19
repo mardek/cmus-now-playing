@@ -24,24 +24,22 @@ prompts.
 
 ## Installation
 
-Install to `~/.local/bin` with curl:
+Install to `~/.local/bin` directly through the main script:
 
 ```sh
-curl -fsSL http://gentoo.local:3000/mArdek/cmus-now-playing/raw/branch/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing | bash -s -- --install
 ```
 
 To install somewhere else, set `PREFIX`:
 
 ```sh
-curl -fsSL http://gentoo.local:3000/mArdek/cmus-now-playing/raw/branch/main/install.sh | PREFIX="$HOME/.local" bash
+curl -fsSL https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing | PREFIX="$HOME/.local" bash -s -- --install
 ```
 
-For system-wide installation, download the installer first and run it with the
-desired privileges after inspecting it:
+For system-wide installation:
 
 ```sh
-curl -fsSLO http://gentoo.local:3000/mArdek/cmus-now-playing/raw/branch/main/install.sh
-sudo PREFIX=/usr/local bash install.sh
+curl -fsSL https://raw.githubusercontent.com/mardek/cmus-now-playing/main/cmus-now-playing | sudo PREFIX=/usr/local bash -s -- --install
 ```
 
 Alternatively, install a local checkout directly:
@@ -67,6 +65,7 @@ cmus-now-playing [OPTIONS]
   -m, --max-length N    truncate to N characters, adding an ellipsis
   --empty-stopped       print nothing when playback is stopped
   --json                print Waybar-compatible JSON
+  --install             install to ${PREFIX:-~/.local}/bin and exit
   -q, --quiet           suppress error messages
   -h, --help            show help
 ```
@@ -133,7 +132,7 @@ Run the test suite and syntax checks:
 
 ```sh
 bash tests/run.sh
-bash -n cmus-now-playing install.sh
+bash -n cmus-now-playing tests/run.sh
 ```
 
 The tests use a mock `cmus-remote`; cmus does not need to be running.
